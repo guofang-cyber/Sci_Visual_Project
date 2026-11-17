@@ -1,0 +1,659 @@
+
+##############################################################################
+#  WORLD TRADE STRUCTURE 1988-2021  ·  analysis + visualization pipeline
+#  Andis Bara Mohammad Yousif  ·  Guofang Li
+##############################################################################
+==============================================================================
+ PREPROCESSING SUMMARY
+==============================================================================
+ Source file            : 34_years_world_export_import_dataset.csv
+ Raw shape              : 8,096 rows x 33 columns   (265 distinct 'Partner Name' values)
+ Time span              : 1988-2021 (34 years), no duplicate (partner, year) keys
+
+ DECISION 1 - Aggregates are not economies
+   Removed 16 non-economy entries (482 rows): 'World', 'Bunkers', 'Free Zones',
+   'Special Categories', 'Unspecified', 'Neutral Zone' and 10 regional aggregates.
+   Kept 249 reporting economies (7,614 rows). The 'World' row is used ONLY for the
+   global trend in figure 02 and never enters clustering or modelling.
+
+ DECISION 2 - Zero-information and duplicated columns dropped
+   - Export Product Share (%)               : constant (== 100 in every row)
+   - Import Product Share (%)               : constant (== 100 in every row)
+   - Revealed comparative advantage         : constant (== 1.0) and 42% missing
+   - MFN MinRate (%)                        : constant (== 0)
+   - World Growth (%)                       : byte-identical duplicate of 'Country Growth (%)'
+
+ DECISION 3 - Sentinel codes and impossible ranges dropped
+   - AHS MaxRate (%)                        : 52% of values >= 500, mode == 3000 -> reporting flag
+   - MFN MaxRate (%)                        : median == 3000, max == 5000 -> reporting flag
+   - MFN AVE Tariff Lines Share (%)         : reaches 3860 on a 0-100 scale
+   - MFN Specific Tariff Lines Share (%)    : reaches 1800 on a 0-100 scale
+   - MFN Simple Average (%)                 : corrupted: near-constant across economies within each year (SD <= 0.7pp after 2004)
+   Evidence for the MFN corruption: within-year SD of 'MFN Simple Average'
+   collapses to <= 0.7pp after 2004 while unrelated economies report almost
+   identical values (2021: China 8.64, Brazil 8.68, Germany 8.52,
+   Singapore 8.50, India 8.47, USA 8.92). Its year-to-year median still swings
+   14.2 -> 24.1 -> 21.8 (1988-1990), i.e. all variation is between years and
+   none between economies. It cannot support cross-country comparison, so the
+   applied (AHS) tariff series is used instead.
+
+ DECISION 4 - Skewed scale variables transformed; panel restricted
+   Export skewness  raw 7.01 -> log10(x+1) -0.39
+   Import skewness  raw 7.27 -> log10(x+1) -0.32
+   Justification is printed with figure 03. Both growth columns are 42.5%
+   missing and are excluded from the matrix. Clustering uses economy-level means over
+   2017-2021 (recent, post-WTO regime).
+   Coverage filter: >= 95% of cells present across the 8 source
+   columns -> 234 of 236 economies kept, 2 dropped.
+   Region mapping: 11 entries unmapped, of which 1 trade materially
+     -> British Virgin Islands
+   Unmapped entries are labelled 'Unclassified' and excluded from the
+   regional comparisons only; they remain in the clustering.
+
+ DECISION 5 - Prediction target defined before modelling
+   Target: 'high_tariff' = applied AHS simple average above the sample median
+   (median = 4.26%). Balance: 117 high / 117 low.
+   Predictor features deliberately EXCLUDE every tariff-rate and duty-free
+   measure to avoid leakage: log_export, log_import, net_trade_balance, log_tariff_lines.
+
+ FINAL ANALYSIS MATRIX  : 234 economies x 8 features
+ FEATURES               : log_export, log_import, net_trade_balance, applied_tariff, weighted_tariff, duty_free_lines, log_tariff_lines, duty_free_imports
+==============================================================================
+
+==============================================================================
+ RUN ANALYSIS (PCA, K-Means, Random Forest)
+==============================================================================
+  PCA variance explained : 48.0%, 22.6%, 12.0%, 7.9%, 4.6%
+  cumulative PC1-PC4     : 90.6%
+  silhouette best k      : 2 (0.303)   at k=4: 0.231
+  cluster sizes          : {np.int64(1): 71, np.int64(2): 73, np.int64(3): 57, np.int64(4): 33}
+    G1  Large · Balanced · Moderate-tariff
+    G2  Mid-sized · Liberal schedule · Low-tariff
+    G3  Small · Surplus · Liberal imports
+    G4  Small · Surplus · High-tariff
+  predictor AUC          : full 0.854  |  structure-only 0.638
+
+==============================================================================
+ GENERATE FIGURES 01-15
+==============================================================================
+  Test: none (descriptive coverage audit) · Result: 234/236 economies retained (99.2%); 42 more economies report in 2021 than in 1988; every region represented except that South Asia
+  (n=8) and North America (n=5) are thin, so regional tests are read as exploratory.
+
+  [saved] 01_coverage_and_balance.png
+  SLIDE TALKING POINT: Coverage is the strongest part of this dataset: 234 of 236 economies survive a 95%-completeness filter, and the panel is nearly balanced from 1988 to 2021.
+
+------------------------------------------------------------------------------
+FIGURE 01 | Act 1 · Data | Who is actually in the record?
+------------------------------------------------------------------------------
+# SLIDE TALKING POINT: Coverage is the strongest part of this dataset: 234 of 236 economies survive a 95%-completeness filter, and the panel is nearly balanced from 1988 to 2021.
+  Test: none (descriptive time series, 'World' rows) · Result: exports ×30.9 (1988->2021), ×26.3 (1988->2019), CAGR 11.0%; 8 of 33 reported years negative, worst 2009 at -12.2%. Note:
+  the reported growth column is on a different basis from nominal change in the level series (see honesty page).
+
+  [saved] 02_world_trade_trend.png
+  SLIDE TALKING POINT: World exports multiplied 31-fold in 34 years at a 11.0% compound rate, but the path has 8 down years and one -12% cliff in 2009.
+
+------------------------------------------------------------------------------
+FIGURE 02 | Act 1 · Data | Thirty-four years, one direction
+------------------------------------------------------------------------------
+# SLIDE TALKING POINT: World exports multiplied 31-fold in 34 years at a 11.0% compound rate, but the path has 8 down years and one -12% cliff in 2009.
+  Test: skewness + Shapiro-Wilk on 234 economies · Result: export skew 7.01 -> -0.39, import skew 7.27 -> -0.32, tariff lines 2.89 -> -0.09 (Shapiro-Wilk rejects normality for all three raw
+  series, all p < 0.001); max/median export ratio = 330. Duty-free import share is bounded 0-100%, so it is not transformed.
+
+  [saved] 03_log_transform_justification.png
+  SLIDE TALKING POINT: Scale variables span six orders of magnitude, so we log-transform them: export skewness falls from 7.0 to -0.39, which is what makes Euclidean clustering defensible.
+
+------------------------------------------------------------------------------
+FIGURE 03 | Act 2 · Structure | Why we take logarithms
+------------------------------------------------------------------------------
+# SLIDE TALKING POINT: Scale variables span six orders of magnitude, so we log-transform them: export skewness falls from 7.0 to -0.39, which is what makes Euclidean clustering defensible.
+  Test: Kruskal-Wallis across 7 regions, per panel · Result: trade scale H = 47.7, p < 0.001, ε² = 0.19; applied tariff H = 20.8, p = 0.002, ε² = 0.07; duty-free imports H = 26.3, p < 0.001, ε² = 0.09. Notch =
+  +/-1.57 IQR/sqrt(n) ~ 95% CI of the median: scale notches separate across most region pairs, tariff notches overlap almost everywhere - region is a size story, not a protection story.
+
+  [saved] 04_region_notched_boxplots.png
+  SLIDE TALKING POINT: The notches show exactly where geography bites: regional medians of trade scale sit far apart, but the notches on applied tariff overlap almost everywhere - so region explains size, not protection.
+
+------------------------------------------------------------------------------
+FIGURE 04 | Act 2 · Structure | Where region bites - and where it doesn't
+------------------------------------------------------------------------------
+# SLIDE TALKING POINT: The notches show exactly where geography bites: regional medians of trade scale sit far apart, but the notches on applied tariff overlap almost everywhere - so region explains size, not protection.
+  Test: Kruskal-Wallis on log10 exports across 7 regions · Result: H = 47.7, p < 0.001, ε² = 0.19; within-region range 5.7 log units (~491,209× in dollars) versus a between-region median range
+  of only 1.28 log units (~19×) - see figure 04 for the same comparison as notched boxes.
+
+  [saved] 05_violin_scale_by_region.png
+  SLIDE TALKING POINT: Every region spans five or six orders of magnitude internally, so geography cannot be the axis along which trade structure organises.
+
+------------------------------------------------------------------------------
+FIGURE 05 | Act 2 · Structure | Scale spread within regions
+------------------------------------------------------------------------------
+# SLIDE TALKING POINT: Every region spans five or six orders of magnitude internally, so geography cannot be the axis along which trade structure organises.
+  Test: Spearman rank correlation, two-sided, Benjamini-Hochberg-relevant cells flagged · Result: Export scale-Import scale ρ = 0.95 (p < 0.001); applied tariff
+  vs export scale ρ = -0.02 (p = 0.759), i.e. trade SIZE is almost unrelated to tariff LEVEL; applied tariff vs duty-free lines ρ = -0.73 (p < 0.001), the
+  strongest policy-internal coupling.
+
+  [saved] 06_spearman_heatmap.png
+  SLIDE TALKING POINT: Size and tariff are decoupled - export scale correlates with schedule size at 0.94 but with tariff level at only -0.01 - so the two are separate dimensions of trade structure.
+
+------------------------------------------------------------------------------
+FIGURE 06 | Act 2 · Structure | What correlates with what
+------------------------------------------------------------------------------
+# SLIDE TALKING POINT: Size and tariff are decoupled - export scale correlates with schedule size at 0.94 but with tariff level at only -0.01 - so the two are separate dimensions of trade structure.
+  Test: none (PCA is a variance decomposition, not a hypothesis test) · Result: PC1 48.0%, PC2 22.6%, PC3 12.0%; the first two components explain 70.7% and
+  the first four 90.6% of variance, so a 2-D map loses little information.
+
+  [saved] 07_pca_scree.png
+  SLIDE TALKING POINT: Eight standardized indicators collapse onto two axes that explain 71% of variance - scale and openness - which is why the next slide can be read as a map.
+
+------------------------------------------------------------------------------
+FIGURE 07 | Act 3 · Groups | Two dimensions carry the system
+------------------------------------------------------------------------------
+# SLIDE TALKING POINT: Eight standardized indicators collapse onto two axes that explain 71% of variance - scale and openness - which is why the next slide can be read as a map.
+  Test: none (descriptive projection) · Result: PC1 loads almost equally on export scale (+0.48), import scale (+0.49) and tariff-line count (+0.48) = SIZE; PC2 separates duty-free lines
+  (-0.64) from applied tariff (+0.67) = OPENNESS. Together 70.7% of variance.
+
+  [saved] 08_pca_biplot.png
+  SLIDE TALKING POINT: One axis is how big you trade, the other is how open your tariff schedule is - and the four groups fall in different quadrants of that map.
+
+------------------------------------------------------------------------------
+FIGURE 08 | Act 3 · Groups | The map of the trading system
+------------------------------------------------------------------------------
+# SLIDE TALKING POINT: One axis is how big you trade, the other is how open your tariff schedule is - and the four groups fall in different quadrants of that map.
+  Test: silhouette width + elbow on inertia, k = 2..10 · Result: inertia knee at k = 4; silhouette peaks only at 0.30 (k = 2) and stays 0.21-0.30 across all k, with 0.23 at our k = 4.
+  We keep k = 4 for interpretability and report the shallow silhouette as an honest limitation: the groups overlap.
+
+  [saved] 09_elbow_silhouette.png
+  SLIDE TALKING POINT: We chose four groups because the elbow flattens there and four profiles are interpretable - but the silhouette is only 0.23, so these are tendencies, not boxes.
+
+------------------------------------------------------------------------------
+FIGURE 09 | Act 3 · Groups | Choosing four groups
+------------------------------------------------------------------------------
+# SLIDE TALKING POINT: We chose four groups because the elbow flattens there and four profiles are interpretable - but the silhouette is only 0.23, so these are tendencies, not boxes.
+  Test: Kruskal-Wallis across the 4 clusters · Result: Export scale: H = 157.4, p < 0.001, ε² = 0.67; Net balance: H = 80.5, p < 0.001, ε² = 0.34; Applied tariff: H = 118.5, p < 0.001, ε² = 0.50; Duty-free
+  lines: H = 144.4, p < 0.001, ε² = 0.61. Largest effect: import scale ε² = 0.78.
+
+  [saved] 10_boxplots_by_cluster.png
+  SLIDE TALKING POINT: All eight indicators separate the four groups at p < 0.001, and the strongest is import scale at ε² = 0.78 - so the groups are real differences, not noise.
+
+------------------------------------------------------------------------------
+FIGURE 10 | Act 3 · Groups | The groups are distinguishable
+------------------------------------------------------------------------------
+# SLIDE TALKING POINT: All eight indicators separate the four groups at p < 0.001, and the strongest is import scale at ε² = 0.78 - so the groups are real differences, not noise.
+  Test: Kruskal-Wallis per feature across the 4 clusters (all p < 0.001, ε² 0.25-0.78) · Result: G1 = large, balanced, moderate tariff; G2 = mid-sized, liberal schedule, low tariff; G3 = small, surplus,
+  liberal imports; G4 = small, surplus, high applied tariff.
+
+  [saved] 11_cluster_profiles.png
+  SLIDE TALKING POINT: Here is the answer to Q5: four groups - a large balanced core, liberal mid-sized openers, small surplus economies with liberal imports, and small surplus economies with high applied tariffs.
+
+------------------------------------------------------------------------------
+FIGURE 11 | Act 3 · Groups | Four named trade strategies
+------------------------------------------------------------------------------
+# SLIDE TALKING POINT: Here is the answer to Q5: four groups - a large balanced core, liberal mid-sized openers, small surplus economies with liberal imports, and small surplus economies with high applied tariffs.
+  Test: permutation importance (200 repeats, held-out set, scoring = ROC AUC) · Result: Duty-free lines accounts for 0.296 AUC, versus 0.039 for the best pure-structure
+  feature; structure-only features together contribute 0.039.
+
+  [saved] 12_feature_importance.png
+  SLIDE TALKING POINT: The prediction is carried by one policy variable - the share of duty-free tariff lines - while pure trade structure contributes only about a third as much per feature.
+
+------------------------------------------------------------------------------
+FIGURE 12 | Act 4 · Predictor | What drives the prediction
+------------------------------------------------------------------------------
+# SLIDE TALKING POINT: The prediction is carried by one policy variable - the share of duty-free tariff lines - while pure trade structure contributes only about a third as much per feature.
+  Test: held-out Random Forest (70/30 stratified split, n_test = 71) vs. structure-only ablation on the same economies · Result: full model AUC = 0.854, balanced accuracy = 0.774; structure-only AUC
+  = 0.638; adding duty-free policy variables gains +0.216 AUC.
+
+  [saved] 13_model_performance.png
+  SLIDE TALKING POINT: Structure alone barely beats a coin flip at AUC 0.64; add the duty-free share of the schedule and we reach 0.85 - so tariff stance is a policy choice, not a consequence of size.
+
+------------------------------------------------------------------------------
+FIGURE 13 | Act 4 · Predictor | Structure is a weak predictor
+------------------------------------------------------------------------------
+# SLIDE TALKING POINT: Structure alone barely beats a coin flip at AUC 0.64; add the duty-free share of the schedule and we reach 0.85 - so tariff stance is a policy choice, not a consequence of size.
+  Test: summary of all preceding tests · Result: world exports ×31 (CAGR 11.0%); 2 dimensions = 71% of variance; 4 groups differ at p < 0.001 (ε² 0.25-0.78); region explains ε² = 0.07 of tariff; held-out AUC = 0.85 full
+  vs 0.64 structure-only.
+
+  [saved] 14_dashboard.png
+  SLIDE TALKING POINT: Everything in one view: a ×31 trade expansion, a two-dimensional map, four distinguishable strategies, and a predictor that says tariff stance is policy, not size.
+
+------------------------------------------------------------------------------
+FIGURE 14 | Act 5 · Answer | The whole study on one canvas
+------------------------------------------------------------------------------
+# SLIDE TALKING POINT: Everything in one view: a ×31 trade expansion, a two-dimensional map, four distinguishable strategies, and a predictor that says tariff stance is policy, not size.
+  Test: synthesis of Q1-Q6 · Result: the hook answer is C (x30.9); the reinterpretation is that 91% of that log-growth occurred before 2008, and tariff level is independent of scale (Spearman rho = -0.02).
+
+  [saved] 15_answer_and_callback.png
+  SLIDE TALKING POINT: C was right - x31 - but for the wrong reason: almost all of it happened before 2008, and how big you trade says nothing about how you tax it.
+
+------------------------------------------------------------------------------
+FIGURE 15 | Act 5 · Answer | The answer and the callback
+------------------------------------------------------------------------------
+# SLIDE TALKING POINT: C was right - x31 - but for the wrong reason: almost all of it happened before 2008, and how big you trade says nothing about how you tax it.
+
+
+================================================================================================================
+ SLIDE MAP   figure -> slide title -> talking point -> seconds
+ 3 presenters, ~15 minutes, audience: course instructor
+================================================================================================================
+  #  FIGURE FILE                            SLIDE TITLE                           SEC  PRESENTER
+----------------------------------------------------------------------------------------------------------------
+  1  01_coverage_and_balance.png            Who is actually in the record?         55  Presenter A
+Coverage is the strongest part of this dataset: 234 of 236 economies survive a 95%-completeness
+     ↳  filter, and the panel is nearly balanced from 1988 to 2021.
+
+  2  02_world_trade_trend.png               Thirty-four years, one direction       60  Presenter A
+World exports multiplied 31-fold in 34 years at a 11.0% compound rate, but the path has 8 down
+     ↳  years and one -12% cliff in 2009.
+
+  3  03_log_transform_justification.png     Why we take logarithms                 55  Presenter A
+Scale variables span six orders of magnitude, so we log-transform them: export skewness falls from
+     ↳  7.0 to -0.39, which is what makes Euclidean clustering defensible.
+
+  4  04_region_notched_boxplots.png         Where region bites - and where it d    55  Presenter B
+The notches show exactly where geography bites: regional medians of trade scale sit far apart, but
+     ↳  the notches on applied tariff overlap almost everywhere - so region explains size, not
+     ↳  protection.
+
+  5  05_violin_scale_by_region.png          Scale spread within regions            50  Presenter B
+Every region spans five or six orders of magnitude internally, so geography cannot be the axis
+     ↳  along which trade structure organises.
+
+  6  06_spearman_heatmap.png                What correlates with what              55  Presenter B
+Size and tariff are decoupled - export scale correlates with schedule size at 0.94 but with tariff
+     ↳  level at only -0.01 - so the two are separate dimensions of trade structure.
+
+  7  07_pca_scree.png                       Two dimensions carry the system        30  Presenter C
+Eight standardized indicators collapse onto two axes that explain 71% of variance - scale and
+     ↳  openness - which is why the next slide can be read as a map.
+
+  8  08_pca_biplot.png                      The map of the trading system          55  Presenter C
+One axis is how big you trade, the other is how open your tariff schedule is - and the four groups
+     ↳  fall in different quadrants of that map.
+
+  9  09_elbow_silhouette.png                Choosing four groups                   35  Presenter C
+We chose four groups because the elbow flattens there and four profiles are interpretable - but
+     ↳  the silhouette is only 0.23, so these are tendencies, not boxes.
+
+ 10  10_boxplots_by_cluster.png             The groups are distinguishable         40  Presenter C
+All eight indicators separate the four groups at p < 0.001, and the strongest is import scale at
+     ↳  ε² = 0.78 - so the groups are real differences, not noise.
+
+ 11  11_cluster_profiles.png                Four named trade strategies            55  Presenter C
+Here is the answer to Q5: four groups - a large balanced core, liberal mid-sized openers, small
+     ↳  surplus economies with liberal imports, and small surplus economies with high applied
+     ↳  tariffs.
+
+ 12  12_feature_importance.png              What drives the prediction             40  Presenter B
+The prediction is carried by one policy variable - the share of duty-free tariff lines - while
+     ↳  pure trade structure contributes only about a third as much per feature.
+
+ 13  13_model_performance.png               Structure is a weak predictor          40  Presenter B
+Structure alone barely beats a coin flip at AUC 0.64; add the duty-free share of the schedule and
+     ↳  we reach 0.85 - so tariff stance is a policy choice, not a consequence of size.
+
+ 14  14_dashboard.png                       The whole study on one canvas          40  Presenter A
+Everything in one view: a ×31 trade expansion, a two-dimensional map, four distinguishable
+     ↳  strategies, and a predictor that says tariff stance is policy, not size.
+
+ 15  15_answer_and_callback.png             The answer and the callback            45  Presenter A
+C was right - x31 - but for the wrong reason: almost all of it happened before 2008, and how big
+     ↳  you trade says nothing about how you tax it.
+
+----------------------------------------------------------------------------------------------------------------
+ TOTAL FIGURE TALKING TIME: 710 s = 11.8 min
+   Presenter A  255 s = 4.2 min   (Andis Bara  (opening hook, data, answer + callback))
+   Presenter B  240 s = 4.0 min   (Guofang     (structure, regional tests, predictor))
+   Presenter C  215 s = 3.6 min   (Mohammad    (groups: PCA, K-Means, cluster profiles))
+   Non-figure slides (hook, cleaning table, 5 part dividers, answer sheet, honesty page, Q&A buffer): ~190 s
+   GRAND TOTAL ~15.0 min -> fits the 15-minute slot
+================================================================================================================
+
+================================================================================
+ DECK OUTLINE  (UN-style narrative architecture: hook -> context -> question ->
+ plan -> part dividers -> per-figure Test . Result -> answer -> honesty ->
+ callback)
+================================================================================
+ TITLE SLIDE
+   "Does the world trading system have a structure?"
+   World export/import and applied-tariff data, 1988-2021
+   (265 reporting entries, 8,096 rows, 33 columns)
+   Andis Bara Mohammad Yousif  ·  Guofang Li
+   Course presentation · 3 presenters · ~15 minutes
+
+ SLIDE 1 · HOOK - "QUICK GUESS"                                    [Presenter A]
+   QUICK GUESS - before we show any analysis:
+   "Between 1988 and 2021, by how much did WORLD MERCHANDISE EXPORTS grow
+    in this dataset?"
+        A  x10        B  x20        C  x30
+   (Ask for a show of hands. Do not reveal. We return to this on slide 22.)
+
+ SLIDE 2 · CONTEXT
+   One sentence: the same file carries trade VALUES and tariff REGIMES for
+   265 reporting entries across 34 years - enough to ask whether the
+   trading system has a structure, not just a total.
+
+ SLIDE 3 · RESEARCH QUESTION
+   "Does the world trading system have a structure - and if so, what kind of
+    economies sit in each part of it?"
+
+ SLIDE 4 · THE PLAN (six numbered sub-questions)
+   Q1  How complete is the record? Which economies and years can we stand on?
+   Q2  How much did world trade grow in 34 years, and was that growth steady?
+   Q3  Is trade scale usable as reported, or must it be transformed?
+   Q4  Do tariff regimes differ systematically across world regions?
+   Q5  Do economies cluster by trade structure, and what defines each group?
+   Q6  Can trade structure alone predict an economy's tariff stance?
+
+   PART 1 · DATA      -> Q1, Q2 -> figures 01-02 -> Presenter A
+   PART 2 · STRUCTURE -> Q3, Q4 -> figures 03-06 -> Presenter A / B
+   PART 3 · GROUPS    -> Q5     -> figures 07-11 -> Presenter C
+   PART 4 · PREDICTOR -> Q6     -> figures 12-13 -> Presenter B
+   PART 5 · ANSWER    -> all    -> figures 14-15 -> Presenter A
+
+ SLIDE 5 · DATA CLEANING - "Five problems in the data, five decisions we state
+           openly"                                                  [Presenter A]
+   ---------------------------------------------------------------------------
+   PROBLEM                              DECISION
+   ---------------------------------------------------------------------------
+   1. 16 entries are aggregates, not    Removed them (482 rows). The 'World'
+      economies: 'World', 'Bunkers',    row is used ONLY for the global trend
+      'Free Zones', 'Special            in figure 02 and never enters
+      Categories', 'Unspecified',       clustering or modelling.
+      'Neutral Zone', 10 regions.
+   ---------------------------------------------------------------------------
+   2. Five columns carry no             Dropped: Export/Import Product Share
+      information at all: two share     and Revealed Comparative Advantage are
+      columns == 100 in every row, RCA  constant; MFN MinRate == 0; 'World
+      == 1.0 in every row, MFN MinRate  Growth' is a byte-identical duplicate
+      == 0, and 'World Growth' is an    of 'Country Growth'.
+      exact duplicate column.
+   ---------------------------------------------------------------------------
+   3. Sentinel codes and impossible     Dropped AHS/MFN MaxRate (52% of values
+      ranges: MaxRate mode = 3000,      >= 500, median 3000 = a reporting
+      MFN AVE share reaches 3860 on a   flag, not a tariff); MFN AVE and MFN
+      0-100 scale. MFN Simple Average   Specific shares (values > 100 on a
+      is CORRUPTED - within-year SD     percent scale). MFN Simple Average is
+      collapses to <= 0.7pp after 2004  corrupted: 2021 China 8.64, Brazil
+      and unrelated economies report    8.68, Germany 8.52, Singapore 8.50,
+      identical values.                 India 8.47, USA 8.92. All its variation
+                                        is between years, none between
+                                        economies -> we use the applied (AHS)
+                                        series instead.
+   ---------------------------------------------------------------------------
+   4. Scale variables span six orders   log10(x + 1) on export, import and
+      of magnitude: max/median export   tariff-line count. Export skewness
+      = 330x, raw skewness 7.01. Growth  7.01 -> -0.39. Bounded percentages
+      variables are 42.5% missing.      (tariff rates, duty-free shares) are
+                                        left untouched; the two growth columns
+                                        are excluded from the matrix.
+   ---------------------------------------------------------------------------
+   5. The prediction target is not      Defined BEFORE modelling as: applied
+      given in the data, and tariff     AHS simple average above the sample
+      columns would leak the answer.    median (4.26%) = 'high-tariff
+                                        economy'. Predictor features exclude
+                                        every tariff RATE; the duty-free
+                                        measures are reported separately as
+                                        the 'policy access' block.
+   ---------------------------------------------------------------------------
+   Result: 234 economies x 8 features, region-mapped, no imputation
+   performed - no missing value was ever filled.
+
+ PART DIVIDER 1 · "PART 1 - DATA"   progress tracker: [Q1 Q2] Q3 Q4 Q5 Q6
+ SLIDE 6   = figure 01  Coverage and balance                        [A] 55 s
+ SLIDE 7   = figure 02  Thirty-four years, one direction            [A] 60 s
+
+ PART DIVIDER 2 · "PART 2 - STRUCTURE"   tracker: Q1 Q2 [Q3 Q4] Q5 Q6
+ SLIDE 8   = figure 03  Why we take logarithms                      [A] 55 s
+ SLIDE 9   = figure 04  Where region bites - and where it doesn't   [B] 55 s
+ SLIDE 10  = figure 05  Scale spread within regions                 [B] 50 s
+ SLIDE 11  = figure 06  What correlates with what                   [B] 55 s
+
+ PART DIVIDER 3 · "PART 3 - GROUPS"   tracker: Q1 Q2 Q3 Q4 [Q5] Q6
+ SLIDE 12  = figure 07  Two dimensions carry the system             [C] 30 s
+ SLIDE 13  = figure 08  The map of the trading system (HERO)        [C] 55 s
+ SLIDE 14  = figure 09  Choosing four groups                        [C] 35 s
+ SLIDE 15  = figure 10  The groups are distinguishable              [C] 40 s
+ SLIDE 16  = figure 11  Four named trade strategies (CLIMAX)        [C] 55 s
+
+ PART DIVIDER 4 · "PART 4 - PREDICTOR"   tracker: Q1 Q2 Q3 Q4 Q5 [Q6]
+ SLIDE 17  = figure 12  What drives the prediction                  [B] 40 s
+ SLIDE 18  = figure 13  Structure is a weak predictor               [B] 40 s
+
+ PART DIVIDER 5 · "PART 5 - THE ANSWER"  tracker: Q1 Q2 Q3 Q4 Q5 Q6 [all]
+ SLIDE 19  = figure 14  The whole study on one canvas               [A] 40 s
+
+ SLIDE 20 · "THE ANSWER" - every sub-question in one line            [Presenter A]
+   Q1  Record      234 of 236 economies kept (>= 95% coverage); panel nearly
+                   balanced, 192
+                   -> 235 reporters over 34 years.
+   Q2  Growth      x31 in 34 years (CAGR 11.0%), but x23 of it
+                   happened before 2008 and only x1.36 after.
+                   9 down years, worst -21.6% nominal in 2009.
+   Q3  Scale       Not usable raw - export skew 7.01 across a 330-fold
+                   max/median range; log10 takes it to -0.39.
+   Q4  Region      Real but small - Kruskal-Wallis p = 0.002, epsilon-squared
+                   only 0.07 for applied tariff. Geography is not the axis.
+   Q5  Groups      Four: G1 Large · Balanced · Moderate-tariff  ·  G2 Mid-sized · Liberal schedule · Low-tariff  ·  G3 Small · Surplus · Liberal imports  ·  G4 Small · Surplus · High-tariff. All 8 features
+                   p < 0.001, epsilon-squared 0.25 to 0.78.
+                   Silhouette only 0.23.
+   Q6  Predictor   Structure alone: AUC 0.64 (barely better than a coin).
+                   Adding duty-free access: AUC 0.85. Tariff stance is a
+                   POLICY choice, not a consequence of size.
+
+ SLIDE 21 · HONESTY - "What we can say / what we cannot say"        [Presenter A]
+   WE CAN SAY
+   + The panel is unusually complete for this kind of source, and our
+     conclusions do not rest on imputation - no missing value was ever filled.
+   + Four groups differ on every indicator at p < 0.001 with large effect
+     sizes (epsilon-squared 0.25-0.78). The grouping is not a visual
+     artefact.
+   + Trade SIZE and tariff LEVEL are statistically decoupled: Spearman
+     rho = -0.02, p = 0.759 across 234 economies. This is our strongest
+     single result and it is a null result we are confident about.
+   + Region explains little tariff variation (epsilon-squared 0.07), so the
+     clusters cut across geography rather than restating it.
+
+   WE CANNOT SAY
+   - We cannot claim the four groups are sharply separated: silhouette width
+     peaks at 0.30 (k = 2) and is only 0.23 at our k = 4. Membership near
+     group boundaries is unstable; k is a modelling choice, not a discovery.
+   - We cannot infer causality. The predictor shows that duty-free schedule
+     share predicts tariff level; both are policy decisions made together.
+   - We cannot compare MFN regimes: that column is corrupted (see cleaning
+     slide), so every tariff statement here is about APPLIED (AHS) tariffs.
+   - We cannot generalize AUC 0.85 to new years or new economies: it is a
+     single 70/30 split of the 2017-2021 window, not a time-series validation.
+   - We cannot treat the ABSOLUTE dollar levels as authoritative. The file is
+     internally consistent (the 'World' row equals 1.03-1.08x the sum of all
+     economies every year) but its levels do not reconcile with published WTO
+     totals for individual years. We therefore make RATIO and within-dataset
+     comparison claims only, never absolute-dollar claims.
+   - We cannot read 'World Growth (%)' as the growth of the export series we
+     plot. The two correlate at 0.98, but nominal change in the level series
+     is on average 2.3x the reported figure, so the reported column is on a
+     different (likely deflated/volume) basis. Figure 02 labels it as reported.
+   - We cannot read 1988-1993 as comparable tariff data: coverage of tariff
+     variables is thinner before 1994, which is why the clustering uses
+     2017-2021 only.
+   - Thin regions (North America n = 5, South Asia n = 8) make the
+     regional tests exploratory, not confirmatory.
+
+ SLIDE 22 · CALLBACK TO THE HOOK                                     [Presenter A]
+   "C was right - for the wrong reason."
+   World exports did grow about x31 (x30.9, to be exact). But x23 of
+   those multiples were earned between 1988 and 2008; since the financial
+   crisis the system has grown only x1.36. And the deeper correction: whatever
+   else changed, the SIZE of an economy never told you how it taxes trade
+   (Spearman rho = -0.02). The structure we found is a structure of POLICY
+   CHOICES - scale, balance, and how much of the schedule is duty-free -
+   not a structure of geography or size.
+   = figure 15
+
+ SLIDE 23 · Q&A ANSWER SHEET  (8 likely instructor questions)
+--------------------------------------------------------------------------------
+ Q: "Why K-Means on data this skewed - and why k = 4?"
+ A: "We log-transformed first: export skewness went from 7.01 to -0.39, so
+     Euclidean distance is meaningful. k = 4 is where the inertia elbow
+     flattens. We are honest that the silhouette is only 0.23 - these are
+     tendencies, not boxes, and k = 2 gives a higher silhouette (0.30)."
+
+ Q: "Your silhouette is low. Doesn't that invalidate the clustering?"
+ A: "It invalidates strong separation, not the differences between groups:
+     every feature differs across the four groups at p < 0.001 with
+     epsilon-squared up to 0.78. Low silhouette in 8 dimensions is expected
+     when a size continuum dominates - which is exactly what PC1 shows
+     (48% of variance on one axis)."
+
+ Q: "Why did you drop MFN instead of fixing it?"
+ A: "Because it is not fixable. Within a year, unrelated economies report
+     nearly the same value - 2021: China 8.64, Brazil 8.68, Germany 8.52,
+     Singapore 8.50. Its year-to-year median swings 14.2 to 24.1 to 21.8.
+     All variation is between years, none between economies, so it cannot
+     support any cross-country comparison. We use applied AHS tariffs."
+
+ Q: "Is your predictor leaking the target?"
+ A: "Partly by design, and we say so. The structure-only model - size,
+     balance, schedule granularity - gets AUC 0.64. The full model adds the
+     duty-free share of lines and imports and reaches 0.85. The honest
+     reading is the GAP: tariff level is not a consequence of size, it is a
+     policy decision that travels with other policy decisions."
+
+ Q: "Why cluster on 2017-2021 means instead of the full panel?"
+ A: "Because tariff-regime data before 1994 is thin and the WTO changed the
+     reporting rules. Averaging the last five years gives one stable
+     observation per economy, avoids letting big economies dominate through
+     repeated years, and keeps all 234 economies above 95% coverage."
+
+ Q: "You mapped regions yourselves. Doesn't that bias figure 04?"
+ A: "It could, so we treat the regional test as a baseline rather than a
+     finding. The point of figure 04 is the SIZE of the effect -
+     epsilon-squared 0.07 - which is small under any reasonable mapping.
+     The clusters in Part 3 are derived from the data, not from our mapping."
+
+ Q: "What does PC1 actually mean? Is it just GDP?"
+ A: "It is a size axis: export scale (+0.48), import scale (+0.49),
+     tariff-line count (+0.48) and duty-free imports (-0.41) all load
+     about equally, while the applied tariff RATE loads at -0.00 - essentially
+     zero. We have no GDP in this file, so we cannot claim it IS GDP, only
+     that it behaves like economic size."
+
+ Q: "What would change your conclusion?"
+ A: "A time-series validation. Our AUC comes from one 70/30 split of the
+     2017-2021 window. If we trained on 2017-2019 and predicted a HELD-OUT
+     YEAR (2021), and the AUC stayed near 0.85, the policy-vs-size result
+     would be much stronger. That is the first thing we would do next."
+--------------------------------------------------------------------------------
+
+ END OF DECK
+================================================================================
+
+
+==============================================================================
+ CONSTRAINT CHECK
+==============================================================================
+
+ 1. Exactly 15 figures, named 01_... through 15_...
+    PNGs in ./figures: 15 numbered (total .png files: 15)
+    [OK ] 01_ -> 01_coverage_and_balance.png
+    [OK ] 02_ -> 02_world_trade_trend.png
+    [OK ] 03_ -> 03_log_transform_justification.png
+    [OK ] 04_ -> 04_region_notched_boxplots.png
+    [OK ] 05_ -> 05_violin_scale_by_region.png
+    [OK ] 06_ -> 06_spearman_heatmap.png
+    [OK ] 07_ -> 07_pca_scree.png
+    [OK ] 08_ -> 08_pca_biplot.png
+    [OK ] 09_ -> 09_elbow_silhouette.png
+    [OK ] 10_ -> 10_boxplots_by_cluster.png
+    [OK ] 11_ -> 11_cluster_profiles.png
+    [OK ] 12_ -> 12_feature_importance.png
+    [OK ] 13_ -> 13_model_performance.png
+    [OK ] 14_ -> 14_dashboard.png
+    [OK ] 15_ -> 15_answer_and_callback.png
+
+ 2. Every figure carries a talking point AND a 'Test . Result'
+    [OK ] 01  talking point 155 chars  ·  Test . Result 263 chars
+    [OK ] 02  talking point 128 chars  ·  Test . Result 292 chars
+    [OK ] 03  talking point 165 chars  ·  Test . Result 310 chars
+    [OK ] 04  talking point 197 chars  ·  Test . Result 391 chars
+    [OK ] 05  talking point 133 chars  ·  Test . Result 278 chars
+    [OK ] 06  talking point 175 chars  ·  Test . Result 347 chars
+    [OK ] 07  talking point 154 chars  ·  Test . Result 226 chars
+    [OK ] 08  talking point 139 chars  ·  Test . Result 260 chars
+    [OK ] 09  talking point 160 chars  ·  Test . Result 295 chars
+    [OK ] 10  talking point 155 chars  ·  Test . Result 283 chars
+    [OK ] 11  talking point 190 chars  ·  Test . Result 259 chars
+    [OK ] 12  talking point 167 chars  ·  Test . Result 226 chars
+    [OK ] 13  talking point 177 chars  ·  Test . Result 257 chars
+    [OK ] 14  talking point 163 chars  ·  Test . Result 241 chars
+    [OK ] 15  talking point 141 chars  ·  Test . Result 203 chars
+
+ 3. No forbidden method is called anywhere in the script
+    (AST scan: 279 distinct names/attributes/imported symbols actually used)
+    [OK ] 'dendrogram' not called
+    [OK ] 'linkage' not called
+    [OK ] 'fcluster' not called
+    [OK ] 'TSNE' not called
+    [OK ] 't_sne' not called
+    [OK ] 'umap' not called
+    [OK ] 'UMAP' not called
+    [OK ] 'FactorAnalysis' not called
+    [OK ] 'Lasso' not called
+    [OK ] 'Ridge' not called
+    [OK ] 'ElasticNet' not called
+    [OK ] 'lasso_path' not called
+    [OK ] 'ridge_regression' not called
+    [OK ] 'MLPClassifier' not called
+    [OK ] 'MLPRegressor' not called
+    [OK ] 'neural_network' not called
+    [OK ] 'DecisionBoundaryDisplay' not called
+    [OK ] 'decision_function' not called
+    [OK ] 'networkx' not called
+    [OK ] 'learning_curve' not called
+    [OK ] 'validation_curve' not called
+    forbidden families: hierarchical clustering/dendrograms, t-SNE,
+    UMAP, factor analysis, lasso/ridge paths, ANN, bootstrap/CV
+    inference plots, decision boundaries, network analysis - none used.
+
+ 4. Modelling + plotting stay inside the allowed stack
+    imported modules: __future__, matplotlib, numpy, os, pandas, scipy, seaborn, sklearn, sys, textwrap, warnings
+    [OK ] unexpected imports: none
+    note: scipy is used ONLY for the hypothesis tests quoted in the
+    'Test . Result' footers (kruskal, spearmanr, shapiro). Every
+    model comes from scikit-learn; every plot from matplotlib or
+    seaborn. Allowed transforms actually used: cleaning,
+    log-transform + justification, standardization, Spearman,
+    K-Means with elbow/silhouette, PCA, one Random Forest.
+
+ 5. Narrative arc: hook -> question -> plan -> 5 dividers -> answer -> honesty -> callback
+    [OK ] hook slide ('QUICK GUESS' with A/B/C options)
+    [OK ] context slide
+    [OK ] explicit research question
+    [OK ] plan with 6 numbered sub-questions
+    [OK ] 5 part dividers with progress tracker
+    [OK ] data-cleaning slide (5 problems -> 5 decisions)
+    [OK ] answer slide (every sub-question in one line)
+    [OK ] honesty slide (can say / cannot say)
+    [OK ] callback slide to the hook
+    [OK ] Q&A answer sheet with 8 questions
+
+ 6. Talk time fits 15 minutes across 3 presenters
+    Presenter A  figures 255 s = 4.2 min   (Andis Bara  (opening hook, data, answer + callback))
+    Presenter B  figures 240 s = 4.0 min   (Guofang     (structure, regional tests, predictor))
+    Presenter C  figures 215 s = 3.6 min   (Mohammad    (groups: PCA, K-Means, cluster profiles))
+    figure time total   : 710 s = 11.8 min
+    + title, hook, context, question, plan, cleaning table,
+      5 dividers, answer sheet, honesty, callback, transitions:
+      ~190 s = ~3.2 min
+    GRAND TOTAL         : ~15.0 min
+
+ 7. Aesthetics (Stephen Few)
+    [OK ] dpi = 180 (>= 150 required)
+    [OK ] redundant spines removed on every panel (helper few())
+    [OK ] ONE big number per slide, annotated on the figure
+          (helper figbignum(), reserved top-right band)
+    [OK ] muted / viridis palette, no saturated primaries
+    [OK ] files named 01_... - 15_... in ./figures
+
+==============================================================================
+ RESULT: ALL CONSTRAINTS SATISFIED
+==============================================================================
+
+All 15 figures written to: ./figures
+

@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Build / scratch artifacts from the deck pipeline (not part of the analysis)
+PPT/
+*.pptx.bak
+*.pre-check.bak
+work/
+
+# NOTE: output/run_log.txt IS committed on purpose — the README cites it as
+# the reproducible evidence for every number in the analysis.
