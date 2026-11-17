@@ -3,7 +3,7 @@
 **Trade values and applied tariffs of 234 economies, 1988–2021 — cleaned, tested, clustered, and predicted in five acts.**
 
 > Course group presentation · Andis Bara · Mohammad Yousif · Guofang Li
-> One runnable script → 15 figures + a 30-slide deck, reproducible from the bundled dataset.
+> One runnable script → 15 figures from the bundled dataset; the final 28-slide deck ships under `slides/`.
 
 ---
 
@@ -104,8 +104,6 @@ A complete run log is in [`output/run_log.txt`](output/run_log.txt). Every numbe
 ├── data/
 │   └── 34_years_world_export_import_dataset.csv   (8,096 rows × 33 cols, 1988–2021)
 ├── figures/                     ← the 15 exhibits, 01_ … 15_ , dpi 180
-├── deck/
-│   └── world-trade-structure-presentation.pptx    (30 slides, build pipeline output)
 ├── slides/
 │   ├── World_trade.pptx                           (final 28-slide presented version)
 │   └── World_trade.pdf                            (PDF export of the same deck)
@@ -170,7 +168,7 @@ This directory holds **early iterations that were not used for any result in the
 
 ## Presentation
 
-[`slides/World_trade.pptx`](slides/World_trade.pptx) is the **final presented version (28 slides)**, with [`slides/World_trade.pdf`](slides/World_trade.pdf) as its PDF export; `deck/world-trade-structure-presentation.pptx` (30 slides) is the auto-built master from which it derives. Both follow the same narrative arc as the figures: opening hook → context → research question → plan → cleaning table → five part dividers with progress trackers → 15 exhibits → the answer → honesty page → callback to the hook → Q&A answer sheet. Each exhibit slide carries its speaker notes.
+[`slides/World_trade.pptx`](slides/World_trade.pptx) is the **final presented version (28 slides)**, with [`slides/World_trade.pdf`](slides/World_trade.pdf) as its PDF export. It follows the same narrative arc as the figures: opening hook → context → research question → plan → cleaning table → five part dividers with progress trackers → 15 exhibits → the answer → honesty page → callback to the hook → Q&A answer sheet. Each exhibit slide carries its speaker notes.
 
 ## Licence
 
